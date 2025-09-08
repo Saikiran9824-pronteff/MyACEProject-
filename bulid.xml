@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="ACE-Build" default="build-bar" basedir=".">
+
+    <!-- ========================
+         PROPERTIES
+         ======================== -->
+    <property name="SRC_DIR" value="Application"/>
+    <property name="BAR_DIR" value="bars"/>
+    <property name="BAR_NAME" value="MyIntegration.bar"/>
+
+    <!-- ========================
+         CREATE BAR DIRECTORY
+         ======================== -->
+    <target name="init">
+        <mkdir dir="${BAR_DIR}"/>
+    </target>
+
+    <!-- ========================
+         BUILD BAR FILE
+         ======================== -->
+    <target name="build-bar" depends="init">
+        <echo message="Building BAR file..."/>
+        <exec executable="mqsicreatebar" failonerror="true">
+            <arg value="-data"/>
+            <arg value="${basedir}"/>
+            <arg value="-b"/>
+            <arg value="${BAR_DIR}/${BAR_NAME}"/>
+            <arg value="-a"/>
+            <arg value="${SRC_DIR}"/>
+        </exec>
+        <echo message="BAR file created at ${BAR_DIR}/${BAR_NAME}"/>
+    </target>
+
+</project>

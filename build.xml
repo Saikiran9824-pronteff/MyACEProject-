@@ -33,7 +33,7 @@
               value="${env.GIT_TOKEN}"/>
     <!-- OpenShift -->
     <property name="OCP_URL"
-              value="https://api.ocp.prontefflabs.com:6443"/>
+              value="https://api.ocp.pronteff.com:6443"/>
     <property name="OCP_TOKEN"
               value="${env.OCP_TOKEN}"/>
     <!-- ================== CONDITIONS ================== -->

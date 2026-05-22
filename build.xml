@@ -169,21 +169,19 @@
         </exec>
     </target>
     <!-- ================== VERIFY DEPLOYMENT ================== -->
-    <target name="verify"
-            depends="patch-ir">
-        <echo message="Waiting for ACE pod rollout..."/>
-        <exec executable="oc" failonerror="true">
-            <arg value="wait"/>
-            <arg value="--for=condition=Ready"/>
-            <arg value="pod"/>
-            <arg value="-l"/>
-            <arg value="app.kubernetes.io/instance=${IR_NAME}"/>
-            <arg value="--timeout=300s"/>
-            <arg value="-n"/>
-            <arg value="${NAMESPACE}"/>
-        </exec>
-        <echo message="BAR Deployment Completed Successfully"/>
-    </target>
+<target name="verify"
+        depends="patch-ir">
+    <echo message="Waiting for ACE deployment rollout..."/>
+    <exec executable="oc" failonerror="true">
+        <arg value="rollout"/>
+        <arg value="status"/>
+        <arg value="deployment/${IR_NAME}-ir"/>
+        <arg value="-n"/>
+        <arg value="${NAMESPACE}"/>
+        <arg value="--timeout=300s"/>
+    </exec>
+    <echo message="BAR Deployment Completed Successfully"/>
+</target>
     <!-- ================== MAIN ================== -->
     <target name="deploy"
             depends="verify"/>

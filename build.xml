@@ -91,18 +91,9 @@
 
     <target name="vault-login">
         <echo message="Authenticating with Vault AppRole (Skipping TLS Verification)..."/>
-        <exec executable="curl" outputproperty="VAULT_LOGIN_RAW" failonerror="true">
-            <arg value="-sk"/> <arg value="--request"/>
-            <arg value="POST"/>
-            <arg value="--data"/>
-            <arg value="{\&quot;role_id\&quot;:\&quot;${VAULT_ROLE_ID}\&quot;,\&quot;secret_id\&quot;:\&quot;${VAULT_SECRET_ID}\&quot;}"/>
-            <arg value="${VAULT_ADDR}/v1/auth/approle/login"/>
-        </exec>
-
-        <exec executable="jq" outputproperty="VAULT_TOKEN" failonerror="true">
-            <arg value="-r"/>
-            <arg value=".auth.client_token"/>
-            <inputstring value="${VAULT_LOGIN_RAW}"/>
+        <exec executable="bash" outputproperty="VAULT_TOKEN" failonerror="true">
+            <arg value="-c"/>
+            <arg value="curl -sk -X POST -d '{\&quot;role_id\&quot;:\&quot;${VAULT_ROLE_ID}\&quot;,\&quot;secret_id\&quot;:\&quot;${VAULT_SECRET_ID}\&quot;}' ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token'"/>
         </exec>
         <echo message="Vault authentication token obtained successfully."/>
     </target>
@@ -110,22 +101,14 @@
     <target name="vault-secrets" depends="vault-login">
         <echo message="Retrieving secrets from Vault (Skipping TLS Verification)..."/>
 
-        <exec executable="curl" outputproperty="VAULT_DATA_RAW" failonerror="true">
-            <arg value="-sk"/> <arg value="-H"/>
-            <arg value="X-Vault-Token: ${VAULT_TOKEN}"/>
-            <arg value="${VAULT_ADDR}/v1/secret/data/jenkins"/>
+        <exec executable="bash" outputproperty="GIT_TOKEN" failonerror="true">
+            <arg value="-c"/>
+            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.GIT_TOKEN != null then .data.data.GIT_TOKEN else .data.GIT_TOKEN end'"/>
         </exec>
 
-        <exec executable="jq" outputproperty="GIT_TOKEN" failonerror="true">
-            <arg value="-r"/>
-            <arg value="if .data.data.GIT_TOKEN != null then .data.data.GIT_TOKEN else .data.GIT_TOKEN end"/>
-            <inputstring value="${VAULT_DATA_RAW}"/>
-        </exec>
-
-        <exec executable="jq" outputproperty="OCP_TOKEN" failonerror="true">
-            <arg value="-r"/>
-            <arg value="if .data.data.OCP_TOKEN != null then .data.data.OCP_TOKEN else .data.OCP_TOKEN end"/>
-            <inputstring value="${VAULT_DATA_RAW}"/>
+        <exec executable="bash" outputproperty="OCP_TOKEN" failonerror="true">
+            <arg value="-c"/>
+            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.OCP_TOKEN != null then .data.data.OCP_TOKEN else .data.OCP_TOKEN end'"/>
         </exec>
 
         <echo message="Vault secrets parsed successfully."/>

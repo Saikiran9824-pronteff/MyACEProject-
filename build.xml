@@ -11,7 +11,6 @@
     <property name="IR_NAME" value="${IR_NAME}"/>
     <property name="NAMESPACE" value="${NAMESPACE}"/>
     <property name="BAR_TOOL" value="${BAR_TOOL}"/>
-
     <property name="OUTPUT_DIR" value="build"/>
     <property name="BAR_FILE" value="${OUTPUT_DIR}/${APP_NAME}.${DSTAMP}-${TSTAMP}.bar"/>
     <property name="ACE_TOOLS" value="/opt/ace-12.0.7.0/tools"/>
@@ -22,13 +21,9 @@
     <property name="GITHUB_PATH" value="bars/${APP_NAME}.${DSTAMP}-${TSTAMP}.bar"/>
     <property name="OCP_URL" value="https://api.ocp.pronteff.com:6443"/>
 
-    <property name="VAULT_ROLE_ID" value="${VAULT_ROLE_ID}"/>
-    <property name="VAULT_SECRET_ID" value="${VAULT_SECRET_ID}"/>
-
     <condition property="is.ibmint">
         <equals arg1="${BAR_TOOL}" arg2="ibmint"/>
     </condition>
-
     <condition property="is.mqsicreatebar">
         <equals arg1="${BAR_TOOL}" arg2="mqsicreatebar"/>
     </condition>
@@ -52,12 +47,8 @@
         <fail message=".project file not found in workspace/${APP_NAME}" unless="project.exists"/>
     </target>
 
-    <target name="create-bar">
+    <target name="create-bar-ibmint" if="is.ibmint">
         <mkdir dir="${OUTPUT_DIR}"/>
-        <echo message="Creating BAR file for ${APP_NAME} using ${BAR_TOOL}"/>
-    </target>
-
-    <target name="create-bar-ibmint" depends="create-bar" if="is.ibmint">
         <echo message="Using ibmint build..."/>
         <exec executable="ibmint" failonerror="true">
             <arg value="package"/>
@@ -68,28 +59,31 @@
         </exec>
     </target>
 
-    <target name="create-bar-mqsicreatebar" depends="prepare-workspace,create-bar" if="is.mqsicreatebar">
+    <target name="create-bar-mqsicreatebar" depends="prepare-workspace" if="is.mqsicreatebar">
+        <mkdir dir="${OUTPUT_DIR}"/>
         <echo message="Using mqsicreatebar build..."/>
         <exec executable="${ACE_TOOLS}/mqsicreatebar" failonerror="true">
-            <arg value="-data"/>
-            <arg value="${basedir}/workspace"/>
-            <arg value="-b"/>
-            <arg value="${BAR_FILE}"/>
-            <arg value="-a"/>
-            <arg value="${APP_NAME}"/>
+            <arg value="-data"/><arg value="${basedir}/workspace"/>
+            <arg value="-b"/><arg value="${BAR_FILE}"/>
+            <arg value="-a"/><arg value="${APP_NAME}"/>
         </exec>
     </target>
 
     <target name="create-bar-wrapper" depends="create-bar-ibmint,create-bar-mqsicreatebar"/>
 
     <target name="vault-login">
-        <echo message="Authenticating with Vault AppRole (Bypassing Server TLS Handshakes)..."/>
+        <echo message="Authenticating with Vault AppRole at ${VAULT_ADDR}..."/>
         
-        <exec executable="bash" outputproperty="VAULT_TOKEN" failonerror="true">
+        <exec executable="bash" outputproperty="VAULT_RAW_RESPONSE" failonerror="false">
             <env key="V_ROLE" value="${VAULT_ROLE_ID}"/>
             <env key="V_SECRET" value="${VAULT_SECRET_ID}"/>
             <arg value="-c"/>
-            <arg value="curl -sk -X POST -d &quot;{\&quot;role_id\&quot;:\&quot;$V_ROLE\&quot;,\&quot;secret_id\&quot;:\&quot;$V_SECRET\&quot;}&quot; ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token // empty'"/>
+            <arg value="curl -sk -X POST -d &quot;{\&quot;role_id\&quot;:\&quot;$V_ROLE\&quot;,\&quot;secret_id\&quot;:\&quot;$V_SECRET\&quot;}&quot; ${VAULT_ADDR}/v1/auth/approle/login"/>
+        </exec>
+
+        <exec executable="bash" outputproperty="VAULT_TOKEN">
+            <arg value="-c"/>
+            <arg value="echo '${VAULT_RAW_RESPONSE}' | jq -r '.auth.client_token // empty'"/>
         </exec>
 
         <condition property="login.failed">
@@ -98,131 +92,57 @@
                 <equals arg1="${VAULT_TOKEN}" arg2="null"/>
             </or>
         </condition>
-        <fail message="CRITICAL ERROR: AppRole login failed. Check your Jenkins Ant property parameters mapping." if="login.failed"/>
+
+        <sequential if:set="login.failed" xmlns:if="ant:if">
+            <echo message="VAULT ERROR RESPONSE: ${VAULT_RAW_RESPONSE}"/>
+            <fail message="CRITICAL ERROR: AppRole login failed. Check credentials and Vault path."/>
+        </sequential>
     </target>
 
     <target name="vault-secrets" depends="vault-login">
-        <echo message="Generating structural token discovery helper script..."/>
-
         <echo file="fetch_secrets.sh"><![CDATA[#!/bin/bash
-RESP1=$(curl -sk -H "X-Vault-Token: ${INTERNAL_TOKEN}" "${VAULT_URL_VAR}/v1/secret/data/data/jenkins")
-GIT1=$(echo "$RESP1" | jq -r '.data.data.GIT_TOKEN // empty')
-OCP1=$(echo "$RESP1" | jq -r '.data.data.OCP_TOKEN // empty')
+RESP=$(curl -sk -H "X-Vault-Token: ${INTERNAL_TOKEN}" "${VAULT_URL_VAR}/v1/secret/data/jenkins")
+GIT=$(echo "$RESP" | jq -r '.data.data.GIT_TOKEN // .data.GIT_TOKEN // empty')
+OCP=$(echo "$RESP" | jq -r '.data.data.OCP_TOKEN // .data.OCP_TOKEN // empty')
 
-if [ -z "$GIT1" ] || [ "$GIT1" == "null" ]; then
-    RESP2=$(curl -sk -H "X-Vault-Token: ${INTERNAL_TOKEN}" "${VAULT_URL_VAR}/v1/secret/data/jenkins")
-    GIT1=$(echo "$RESP2" | jq -r '.data.data.GIT_TOKEN // .data.GIT_TOKEN // empty')
-    OCP1=$(echo "$RESP2" | jq -r '.data.data.OCP_TOKEN // .data.OCP_TOKEN // empty')
-fi
-
-echo "GIT_TOKEN=$GIT1" > vault.properties
-echo "OCP_TOKEN=$OCP1" >> vault.properties
+echo "GIT_TOKEN=$GIT" > vault.properties
+echo "OCP_TOKEN=$OCP" >> vault.properties
 ]]></echo>
-
         <chmod file="fetch_secrets.sh" perm="755"/>
-        <echo message="Retrieving tokens from Vault..."/>
-        
-        <exec executable="./fetch_secrets.sh" failonerror="true" basedir="${basedir}">
+        <exec executable="./fetch_secrets.sh" failonerror="true">
             <env key="INTERNAL_TOKEN" value="${VAULT_TOKEN}"/>
             <env key="VAULT_URL_VAR" value="${VAULT_ADDR}"/>
         </exec>
-
         <property file="vault.properties"/>
-
-        <condition property="tokens.invalid">
-            <or>
-                <not><isset property="GIT_TOKEN"/></not>
-                <not><isset property="OCP_TOKEN"/></not>
-                <equals arg1="${GIT_TOKEN}" arg2=""/>
-                <equals arg1="${GIT_TOKEN}" arg2="null"/>
-                <equals arg1="${OCP_TOKEN}" arg2=""/>
-                <equals arg1="${OCP_TOKEN}" arg2="null"/>
-            </or>
-        </condition>
-        <fail message="CRITICAL ERROR: Retrieved empty or null tokens from your Vault server paths." if="tokens.invalid"/>
-
-        <echo message="Vault tokens successfully isolated and loaded."/>
-        <delete file="fetch_secrets.sh" failonerror="false"/>
     </target>
 
     <target name="oc-login" depends="vault-secrets">
-        <echo message="Logging into OpenShift..."/>
         <exec executable="oc" failonerror="true">
-            <arg value="login"/>
-            <arg value="${OCP_URL}"/>
-            <arg value="--token=${OCP_TOKEN}"/>
-            <arg value="--insecure-skip-tls-verify=true"/>
-        </exec>
-        <exec executable="oc" failonerror="true">
-            <arg value="project"/>
-            <arg value="${NAMESPACE}"/>
+            <arg value="login"/><arg value="${OCP_URL}"/>
+            <arg value="--token=${OCP_TOKEN}"/><arg value="--insecure-skip-tls-verify=true"/>
         </exec>
     </target>
 
     <target name="upload-github" depends="create-bar-wrapper,vault-secrets">
-        <echo message="Uploading BAR to GitHub..."/>
-        
-        <delete dir="repo" failonerror="false"/>
-
-        <exec executable="bash" failonerror="false">
-            <arg value="-c"/>
-            <arg value="rm -f ~/.git-credentials &amp;&amp; git config --global --unset credential.helper"/>
-        </exec>
-
-        <exec executable="git" failonerror="true">
-            <arg value="config"/>
-            <arg value="--global"/>
-            <arg value="user.email"/>
-            <arg value="ci-bot@example.com"/>
-        </exec>
-        <exec executable="git" failonerror="true">
-            <arg value="config"/>
-            <arg value="--global"/>
-            <arg value="user.name"/>
-            <arg value="ci-bot"/>
-        </exec>
-
         <exec executable="bash" failonerror="true">
             <arg value="-c"/>
             <arg value="git config --global credential.helper store &amp;&amp; echo &quot;https://x-token-auth:${GIT_TOKEN}@github.com&quot; &gt; ~/.git-credentials"/>
         </exec>
-
-        <exec executable="bash" failonerror="true">
-            <arg value="-c"/>
-            <arg value="git clone https://github.com/${GITHUB_REPO}.git repo"/>
-        </exec>
-
-        <mkdir dir="repo/bars"/>
-        <copy file="${BAR_FILE}" tofile="repo/${GITHUB_PATH}" failonerror="true"/>
-
-        <exec executable="bash" failonerror="true">
-            <arg value="-c"/>
-            <arg value="cd repo &amp;&amp; git add ${GITHUB_PATH} &amp;&amp; git commit -m 'CI: Update BAR' &amp;&amp; git push origin ${GITHUB_BRANCH}"/>
+        <delete dir="repo" failonerror="false"/>
+        <exec executable="git"><arg value="clone"/><arg value="https://github.com/${GITHUB_REPO}.git"/><arg value="repo"/></exec>
+        <copy file="${BAR_FILE}" tofile="repo/${GITHUB_PATH}"/>
+        <exec executable="bash" dir="repo" failonerror="true">
+            <arg value="-c"/><arg value="git add . &amp;&amp; git commit -m 'CI: Update BAR' &amp;&amp; git push origin ${GITHUB_BRANCH}"/>
         </exec>
     </target>
 
-    <target name="patch-ir" depends="upload-github,oc-login">
+    <target name="deploy" depends="upload-github,oc-login">
         <property name="BAR_URL" value="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_PATH}"/>
-        <echo message="Deploying BAR to IntegrationRuntime ${IR_NAME}"/>
-        <exec executable="bash" failonerror="true">
-            <arg value="-c"/>
-            <arg value="oc patch integrationruntime ${IR_NAME} --type=merge -p '{&quot;spec&quot;:{&quot;barURL&quot;:[&quot;${BAR_URL}\&quot;]}}' -n ${NAMESPACE}"/>
-        </exec>
-    </target>
-
-    <target name="verify" depends="patch-ir">
-        <echo message="Waiting for ACE deployment rollout..."/>
         <exec executable="oc" failonerror="true">
-            <arg value="rollout"/>
-            <arg value="status"/>
-            <arg value="deployment/${IR_NAME}-ir"/>
-            <arg value="-n"/>
-            <arg value="${NAMESPACE}"/>
-            <arg value="--timeout=300s"/>
+            <arg value="patch"/><arg value="integrationruntime"/><arg value="${IR_NAME}"/>
+            <arg value="--type=merge"/><arg value="-p"/><arg value="{&quot;spec&quot;:{&quot;barURL&quot;:[&quot;${BAR_URL}&quot;]}}"/>
+            <arg value="-n"/><arg value="${NAMESPACE}"/>
         </exec>
-        <echo message="BAR Deployment Completed Successfully"/>
     </target>
-
-    <target name="deploy" depends="verify"/>
 
 </project>

@@ -119,7 +119,8 @@ echo "OCP_TOKEN=$OCP1" >> vault.properties
 
         <chmod file="fetch_secrets.sh" perm="755"/>
         <echo message="Retrieving tokens from Vault..."/>
-        <exec executable="./fetch_secrets.sh" failonerror="true" basedir="${basedir}"/>
+        
+        <exec executable="./fetch_secrets.sh" failonerror="true" dir="${basedir}"/>
 
         <property file="vault.properties"/>
 

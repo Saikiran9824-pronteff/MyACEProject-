@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project name="ace-ir-deploy" default="deploy" basedir=".">
 
-    <property environment="env"/>
-
     <tstamp>
         <format property="DSTAMP" pattern="yyyyMMdd"/>
         <format property="TSTAMP" pattern="HHmmss"/>
@@ -24,13 +22,8 @@
     <property name="GITHUB_PATH" value="bars/${APP_NAME}.${DSTAMP}-${TSTAMP}.bar"/>
     <property name="OCP_URL" value="https://api.ocp.pronteff.com:6443"/>
 
-    <condition property="RESOLVED_ROLE" value="${env.vault_role_id}" else="${env.VAULT_ROLE_ID}">
-        <isset property="env.vault_role_id"/>
-    </condition>
-    
-    <condition property="RESOLVED_SECRET" value="${env.vault_secret_id}" else="${env.VAULT_SECRET_ID}">
-        <isset property="env.vault_secret_id"/>
-    </condition>
+    <property name="VAULT_ROLE_ID" value="${VAULT_ROLE_ID}"/>
+    <property name="VAULT_SECRET_ID" value="${VAULT_SECRET_ID}"/>
 
     <condition property="is.ibmint">
         <equals arg1="${BAR_TOOL}" arg2="ibmint"/>
@@ -93,8 +86,8 @@
         <echo message="Authenticating with Vault AppRole (Bypassing Server TLS Handshakes)..."/>
         
         <exec executable="bash" outputproperty="VAULT_TOKEN" failonerror="true">
-            <env key="V_ROLE" value="${RESOLVED_ROLE}"/>
-            <env key="V_SECRET" value="${RESOLVED_SECRET}"/>
+            <env key="V_ROLE" value="${VAULT_ROLE_ID}"/>
+            <env key="V_SECRET" value="${VAULT_SECRET_ID}"/>
             <arg value="-c"/>
             <arg value="curl -sk -X POST -d &quot;{\&quot;role_id\&quot;:\&quot;$V_ROLE\&quot;,\&quot;secret_id\&quot;:\&quot;$V_SECRET\&quot;}&quot; ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token // empty'"/>
         </exec>
@@ -105,7 +98,7 @@
                 <equals arg1="${VAULT_TOKEN}" arg2="null"/>
             </or>
         </condition>
-        <fail message="CRITICAL ERROR: AppRole login generated an empty context token validation check block. Check your variables case alignment inside Jenkins UI." if="login.failed"/>
+        <fail message="CRITICAL ERROR: AppRole login failed. Check your Jenkins Ant property parameters mapping." if="login.failed"/>
     </target>
 
     <target name="vault-secrets" depends="vault-login">

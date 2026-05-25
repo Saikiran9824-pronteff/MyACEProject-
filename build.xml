@@ -93,7 +93,7 @@
     <target name="create-bar-wrapper" depends="create-bar-ibmint,create-bar-mqsicreatebar"/>
 
     <target name="vault-login">
-        <echo message="Authenticating with Vault AppRole (Skipping TLS Verification)..."/>
+        <echo message="Authenticating with Vault AppRole (Bypassing Server TLS Handshakes)..."/>
         
         <delete file="vault_login_resp.json" failonerror="false"/>
         

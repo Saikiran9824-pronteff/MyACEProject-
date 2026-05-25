@@ -45,6 +45,7 @@
         <delete dir="${OUTPUT_DIR}"/>
         <delete dir="workspace"/>
         <delete dir="repo"/>
+        <delete file="vault.properties" failonerror="false"/>
     </target>
 
     <target name="prepare-workspace" depends="clean">
@@ -91,27 +92,29 @@
 
     <target name="vault-login">
         <echo message="Authenticating with Vault AppRole (Skipping TLS Verification)..."/>
-        <exec executable="bash" outputproperty="VAULT_TOKEN" failonerror="true">
+        <exec executable="bash" outputproperty="VAULT_TOKEN_RAW" failonerror="true">
             <arg value="-c"/>
             <arg value="curl -sk -X POST -d '{\&quot;role_id\&quot;:\&quot;${VAULT_ROLE_ID}\&quot;,\&quot;secret_id\&quot;:\&quot;${VAULT_SECRET_ID}\&quot;}' ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token'"/>
         </exec>
-        <echo message="Vault authentication token obtained successfully."/>
     </target>
 
     <target name="vault-secrets" depends="vault-login">
         <echo message="Retrieving secrets from Vault (Skipping TLS Verification)..."/>
 
-        <exec executable="bash" outputproperty="GIT_TOKEN" failonerror="true">
+        <exec executable="bash" outputproperty="VAULT_GIT_OUT" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.GIT_TOKEN != null then .data.data.GIT_TOKEN else .data.GIT_TOKEN end'"/>
+            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.GIT_TOKEN != null then .data.data.GIT_TOKEN else .data.GIT_TOKEN end'"/>
         </exec>
 
-        <exec executable="bash" outputproperty="OCP_TOKEN" failonerror="true">
+        <exec executable="bash" outputproperty="VAULT_OCP_OUT" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.OCP_TOKEN != null then .data.data.OCP_TOKEN else .data.OCP_TOKEN end'"/>
+            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.OCP_TOKEN != null then .data.data.OCP_TOKEN else .data.OCP_TOKEN end'"/>
         </exec>
 
-        <echo message="Vault secrets parsed successfully."/>
+        <echo file="vault.properties">GIT_TOKEN=${VAULT_GIT_OUT}${line.separator}OCP_TOKEN=${VAULT_OCP_OUT}</echo>
+        <property file="vault.properties"/>
+
+        <echo message="Vault tokens loaded and successfully bound to global properties."/>
     </target>
 
     <target name="oc-login" depends="vault-secrets">
@@ -147,9 +150,8 @@
         </exec>
 
         <exec executable="bash" failonerror="true">
-            <env key="ENV_GIT_TOKEN" value="${GIT_TOKEN}"/>
             <arg value="-c"/>
-            <arg value="git clone https://$ENV_GIT_TOKEN@github.com/${GITHUB_REPO}.git repo"/>
+            <arg value="git clone https://${GIT_TOKEN}@github.com/${GITHUB_REPO}.git repo"/>
         </exec>
 
         <mkdir dir="repo/bars"/>
@@ -165,15 +167,9 @@
     <target name="patch-ir" depends="upload-github,oc-login">
         <property name="BAR_URL" value="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_PATH}"/>
         <echo message="Deploying BAR to IntegrationRuntime ${IR_NAME}"/>
-        <exec executable="oc" failonerror="true">
-            <arg value="patch"/>
-            <arg value="integrationruntime"/>
-            <arg value="${IR_NAME}"/>
-            <arg value="--type=merge"/>
-            <arg value="-p"/>
-            <arg value="{\&quot;spec\&quot;:{\&quot;barURL\&quot;:[\&quot;${BAR_URL}\&quot;]}}"/>
-            <arg value="-n"/>
-            <arg value="${NAMESPACE}"/>
+        <exec executable="bash" failonerror="true">
+            <arg value="-c"/>
+            <arg value="oc patch integrationruntime ${IR_NAME} --type=merge -p '{&quot;spec&quot;:{&quot;barURL&quot;:[&quot;${BAR_URL}\&quot;]}}' -n ${NAMESPACE}"/>
         </exec>
     </target>
 

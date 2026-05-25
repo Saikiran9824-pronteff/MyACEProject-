@@ -150,9 +150,13 @@
         </exec>
 
         <exec executable="bash" failonerror="true">
-            <env key="RUN_TOKEN" value="${GIT_TOKEN}"/>
             <arg value="-c"/>
-            <arg value="git clone https://$RUN_TOKEN@github.com/${GITHUB_REPO}.git repo"/>
+            <arg value="git config --global credential.helper store &amp;&amp; echo &quot;https://x-token-auth:${GIT_TOKEN}@github.com&quot; &gt; ~/.git-credentials"/>
+        </exec>
+
+        <exec executable="bash" failonerror="true">
+            <arg value="-c"/>
+            <arg value="git clone https://github.com/${GITHUB_REPO}.git repo"/>
         </exec>
 
         <mkdir dir="repo/bars"/>
@@ -160,9 +164,8 @@
         <copy file="${BAR_FILE}" tofile="repo/${GITHUB_PATH}" failonerror="true"/>
 
         <exec executable="bash" failonerror="true">
-            <env key="RUN_TOKEN" value="${GIT_TOKEN}"/>
             <arg value="-c"/>
-            <arg value="cd repo &amp;&amp; git add ${GITHUB_PATH} &amp;&amp; git commit -m 'CI: Update BAR' &amp;&amp; git push https://$RUN_TOKEN@github.com/${GITHUB_REPO}.git ${GITHUB_BRANCH}"/>
+            <arg value="cd repo &amp;&amp; git add ${GITHUB_PATH} &amp;&amp; git commit -m 'CI: Update BAR' &amp;&amp; git push origin ${GITHUB_BRANCH}"/>
         </exec>
     </target>
 

@@ -99,30 +99,52 @@
     </target>
 
     <target name="vault-secrets" depends="vault-login">
-        <echo message="Retrieving secrets from exact Vault KVv2 Path..."/>
+        <echo message="Retrieving secrets from Vault..."/>
 
-        <exec executable="bash" outputproperty="VAULT_GIT_OUT" failonerror="true">
+        <exec executable="bash" outputproperty="VAULT_OUTPUT_DATA" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/data/jenkins | jq -r '.data.data.GIT_TOKEN'"/>
+            <arg value="
+            RESP1=$(curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/data/jenkins)
+            GIT1=$(echo \&quot;$RESP1\&quot; | jq -r '.data.data.GIT_TOKEN // empty')
+            OCP1=$(echo \&quot;$RESP1\&quot; | jq -r '.data.data.OCP_TOKEN // empty')
+            
+            if [ -z \&quot;$GIT1\&quot; ]; then
+                RESP2=$(curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins)
+                GIT1=$(echo \&quot;$RESP2\&quot; | jq -r '.data.data.GIT_TOKEN // .data.GIT_TOKEN // empty')
+                OCP1=$(echo \&quot;$RESP2\&quot; | jq -r '.data.data.OCP_TOKEN // .data.OCP_TOKEN // empty')
+            fi
+            
+            echo \&quot;PARSED_GIT=$GIT1\&quot;
+            echo \&quot;PARSED_OCP=$OCP1\&quot;
+            "/>
         </exec>
 
-        <exec executable="bash" outputproperty="VAULT_OCP_OUT" failonerror="true">
+        <echo message="${VAULT_OUTPUT_DATA}"/>
+
+        <exec executable="bash" outputproperty="GIT_TOKEN" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/data/jenkins | jq -r '.data.data.OCP_TOKEN'"/>
+            <arg value="echo '${VAULT_OUTPUT_DATA}' | grep 'PARSED_GIT=' | cut -d= -f2 | tr -d '\n\r'"/>
         </exec>
 
-        <echo file="vault.properties">GIT_TOKEN=${VAULT_GIT_OUT}${line.separator}OCP_TOKEN=${VAULT_OCP_OUT}</echo>
+        <exec executable="bash" outputproperty="OCP_TOKEN" failonerror="true">
+            <arg value="-c"/>
+            <arg value="echo '${VAULT_OUTPUT_DATA}' | grep 'PARSED_OCP=' | cut -d= -f2 | tr -d '\n\r'"/>
+        </exec>
+
+        <echo file="vault.properties">GIT_TOKEN=${GIT_TOKEN}${line.separator}OCP_TOKEN=${OCP_TOKEN}</echo>
         <property file="vault.properties"/>
 
         <condition property="tokens.invalid">
             <or>
-                <equals arg1="${GIT_TOKEN}" arg2="null"/>
                 <equals arg1="${GIT_TOKEN}" arg2=""/>
+                <equals arg1="${GIT_TOKEN}" arg2="null"/>
+                <equals arg1="${OCP_TOKEN}" arg2=""/>
+                <equals arg1="${OCP_TOKEN}" arg2="null"/>
             </or>
         </condition>
-        <fail message="CRITICAL ERROR: Failed to recover a clean token string value from Vault target path." if="tokens.invalid"/>
+        <fail message="CRITICAL ERROR: Failed to isolate a clean token signature from either Vault endpoint paths." if="tokens.invalid"/>
 
-        <echo message="Vault tokens successfully verified, isolated, and injected."/>
+        <echo message="Vault tokens successfully isolated and verified inside build state."/>
     </target>
 
     <target name="oc-login" depends="vault-secrets">

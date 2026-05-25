@@ -103,14 +103,29 @@
         <echo message="Generating structural token discovery helper script..."/>
 
         <echo file="fetch_secrets.sh"><![CDATA[#!/bin/bash
+echo "=== Debug: Pulling via Custom Path V2 layout ==="
 RESP1=$(curl -sk -H "X-Vault-Token: ${VAULT_TOKEN_RAW}" "${VAULT_ADDR}/v1/secret/data/data/jenkins")
+echo "RESP1 Output: $RESP1"
+
 GIT1=$(echo "$RESP1" | jq -r '.data.data.GIT_TOKEN // empty')
 OCP1=$(echo "$RESP1" | jq -r '.data.data.OCP_TOKEN // empty')
 
 if [ -z "$GIT1" ] || [ "$GIT1" == "null" ]; then
+    echo "=== Debug: Path 1 empty or invalid, pulling via standard path layout ==="
     RESP2=$(curl -sk -H "X-Vault-Token: ${VAULT_TOKEN_RAW}" "${VAULT_ADDR}/v1/secret/data/jenkins")
+    echo "RESP2 Output: $RESP2"
+    
     GIT1=$(echo "$RESP2" | jq -r '.data.data.GIT_TOKEN // .data.GIT_TOKEN // empty')
     OCP1=$(echo "$RESP2" | jq -r '.data.data.OCP_TOKEN // .data.OCP_TOKEN // empty')
+fi
+
+if [ -z "$GIT1" ] || [ "$GIT1" == "null" ]; then
+    echo "=== Debug: Attempting fallback directly to KV v1 engine direct path ==="
+    RESP3=$(curl -sk -H "X-Vault-Token: ${VAULT_TOKEN_RAW}" "${VAULT_ADDR}/v1/secret/jenkins")
+    echo "RESP3 Output: $RESP3"
+    
+    GIT1=$(echo "$RESP3" | jq -r '.data.GIT_TOKEN // .GIT_TOKEN // empty')
+    OCP1=$(echo "$RESP3" | jq -r '.data.OCP_TOKEN // .OCP_TOKEN // empty')
 fi
 
 echo "GIT_TOKEN=$GIT1" > vault.properties

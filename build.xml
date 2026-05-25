@@ -1,36 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project name="ace-ir-deploy" default="deploy" basedir=".">
 
-    <!-- ================== PROPERTIES ================== -->
-
-    <!-- Environment Variables -->
     <property environment="env"/>
 
-    <!-- Timestamp -->
     <tstamp>
         <format property="DSTAMP" pattern="yyyyMMdd"/>
         <format property="TSTAMP" pattern="HHmmss"/>
     </tstamp>
 
-    <!-- Repository Application Path -->
     <property name="BUILD_DIR" value="Applications"/>
 
-    <!-- Jenkins Parameters -->
     <property name="APP_NAME" value="${APP_NAME}"/>
     <property name="IR_NAME" value="${IR_NAME}"/>
     <property name="NAMESPACE" value="${NAMESPACE}"/>
     <property name="BAR_TOOL" value="${BAR_TOOL}"/>
 
-    <!-- Output -->
     <property name="OUTPUT_DIR" value="build"/>
     <property name="BAR_FILE"
               value="${OUTPUT_DIR}/${APP_NAME}.${DSTAMP}-${TSTAMP}.bar"/>
 
-    <!-- ACE Tools -->
     <property name="ACE_TOOLS"
               value="/opt/ace-12.0.7.0/tools"/>
 
-    <!-- Vault -->
     <property name="VAULT_ADDR"
               value="https://192.168.17.54:8200"/>
 
@@ -40,7 +31,6 @@
     <property name="VAULT_SECRET_ID"
               value="${env.VAULT_SECRET_ID}"/>
 
-    <!-- GitHub Repository -->
     <property name="GITHUB_REPO"
               value="Saikiran9824-pronteff/MyACEProject-"/>
 
@@ -50,11 +40,8 @@
     <property name="GITHUB_PATH"
               value="bars/${APP_NAME}.${DSTAMP}-${TSTAMP}.bar"/>
 
-    <!-- OpenShift -->
     <property name="OCP_URL"
               value="https://api.ocp.pronteff.com:6443"/>
-
-    <!-- ================== CONDITIONS ================== -->
 
     <condition property="is.ibmint">
         <equals arg1="${BAR_TOOL}" arg2="ibmint"/>
@@ -64,16 +51,12 @@
         <equals arg1="${BAR_TOOL}" arg2="mqsicreatebar"/>
     </condition>
 
-    <!-- ================== CLEAN ================== -->
-
     <target name="clean">
         <echo message="Cleaning old artifacts..."/>
         <delete dir="${OUTPUT_DIR}"/>
         <delete dir="workspace"/>
         <delete dir="repo"/>
     </target>
-
-    <!-- ================== PREPARE WORKSPACE ================== -->
 
     <target name="prepare-workspace" depends="clean">
 
@@ -93,14 +76,10 @@
 
     </target>
 
-    <!-- ================== CREATE BAR ================== -->
-
     <target name="create-bar">
         <mkdir dir="${OUTPUT_DIR}"/>
         <echo message="Creating BAR file for ${APP_NAME} using ${BAR_TOOL}"/>
     </target>
-
-    <!-- ================== IBMINT BUILD ================== -->
 
     <target name="create-bar-ibmint"
             depends="create-bar"
@@ -119,8 +98,6 @@
         <echo message="BAR Created: ${BAR_FILE}"/>
 
     </target>
-
-    <!-- ================== MQSICREATEBAR BUILD ================== -->
 
     <target name="create-bar-mqsicreatebar"
             depends="prepare-workspace,create-bar"
@@ -146,12 +123,8 @@
 
     </target>
 
-    <!-- Wrapper -->
-
     <target name="create-bar-wrapper"
             depends="create-bar-ibmint,create-bar-mqsicreatebar"/>
-
-    <!-- ================== VAULT LOGIN ================== -->
 
     <target name="vault-login">
 
@@ -161,20 +134,12 @@
               outputproperty="VAULT_TOKEN"
               failonerror="true">
             <arg value="-c"/>
-            <arg value="
-curl -sk \
---request POST \
---data '{\"role_id\":\"${VAULT_ROLE_ID}\",\"secret_id\":\"${VAULT_SECRET_ID}\"}' \
-${VAULT_ADDR}/v1/auth/approle/login \
-| jq -r '.auth.client_token'
-"/>
+            <arg line="'curl -sk --request POST --data &quot;{\&quot;role_id\&quot;:\&quot;${VAULT_ROLE_ID}\&quot;,\&quot;secret_id\&quot;:\&quot;${VAULT_SECRET_ID}\&quot;}&quot; ${VAULT_ADDR}/v1/auth/approle/login | jq -r .auth.client_token'"/>
         </exec>
 
         <echo message="Vault authentication successful"/>
 
     </target>
-
-    <!-- ================== GET VAULT SECRETS ================== -->
 
     <target name="vault-secrets"
             depends="vault-login">
@@ -185,31 +150,19 @@ ${VAULT_ADDR}/v1/auth/approle/login \
               outputproperty="GIT_TOKEN"
               failonerror="true">
             <arg value="-c"/>
-            <arg value="
-curl -sk \
--H 'X-Vault-Token:${VAULT_TOKEN}' \
-${VAULT_ADDR}/v1/secret/data/jenkins \
-| jq -r '.data.data.GIT_TOKEN'
-"/>
+            <arg value="curl -sk -H 'X-Vault-Token:${VAULT_TOKEN}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r '.data.data.GIT_TOKEN'"/>
         </exec>
 
         <exec executable="bash"
               outputproperty="OCP_TOKEN"
               failonerror="true">
             <arg value="-c"/>
-            <arg value="
-curl -sk \
--H 'X-Vault-Token:${VAULT_TOKEN}' \
-${VAULT_ADDR}/v1/secret/data/jenkins \
-| jq -r '.data.data.OCP_TOKEN'
-"/>
+            <arg value="curl -sk -H 'X-Vault-Token:${VAULT_TOKEN}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r '.data.data.OCP_TOKEN'"/>
         </exec>
 
         <echo message="Vault secrets loaded successfully"/>
 
     </target>
-
-    <!-- ================== LOGIN TO OPENSHIFT ================== -->
 
     <target name="oc-login"
             depends="vault-secrets">
@@ -229,8 +182,6 @@ ${VAULT_ADDR}/v1/secret/data/jenkins \
         </exec>
 
     </target>
-
-    <!-- ================== UPLOAD BAR TO GITHUB ================== -->
 
     <target name="upload-github"
             depends="create-bar-wrapper,vault-secrets">
@@ -275,8 +226,6 @@ ${VAULT_ADDR}/v1/secret/data/jenkins \
 
     </target>
 
-    <!-- ================== PATCH INTEGRATIONRUNTIME ================== -->
-
     <target name="patch-ir"
             depends="upload-github,oc-login">
 
@@ -291,8 +240,6 @@ ${VAULT_ADDR}/v1/secret/data/jenkins \
         </exec>
 
     </target>
-
-    <!-- ================== VERIFY DEPLOYMENT ================== -->
 
     <target name="verify"
             depends="patch-ir">
@@ -311,8 +258,6 @@ ${VAULT_ADDR}/v1/secret/data/jenkins \
         <echo message="BAR Deployment Completed Successfully"/>
 
     </target>
-
-    <!-- ================== MAIN ================== -->
 
     <target name="deploy"
             depends="verify"/>

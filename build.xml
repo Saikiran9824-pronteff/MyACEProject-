@@ -95,7 +95,7 @@
         <echo message="Authenticating with Vault AppRole (Skipping TLS Verification)..."/>
         <exec executable="bash" outputproperty="VAULT_TOKEN_RAW" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -X POST -d '{\&quot;role_id\&quot;:\&quot;${VAULT_ROLE_ID}\&quot;,\&quot;secret_id\&quot;:\&quot;${VAULT_SECRET_ID}\&quot;}' ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token'"/>
+            <arg value="curl -sk -X POST --data-urlencode &quot;role_id=${VAULT_ROLE_ID}&quot; --data-urlencode &quot;secret_id=${VAULT_SECRET_ID}&quot; ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token // empty'"/>
         </exec>
     </target>
 
@@ -103,6 +103,11 @@
         <echo message="Generating structural token discovery helper script..."/>
 
         <echo file="fetch_secrets.sh"><![CDATA[#!/bin/bash
+if [ -z "${VAULT_TOKEN_RAW}" ] || [ "${VAULT_TOKEN_RAW}" == "null" ]; then
+    echo "CRITICAL: The login target failed to obtain a usable Vault token string."
+    exit 1
+fi
+
 echo "=== Debug: Pulling via Custom Path V2 layout ==="
 RESP1=$(curl -sk -H "X-Vault-Token: ${VAULT_TOKEN_RAW}" "${VAULT_ADDR}/v1/secret/data/data/jenkins")
 echo "RESP1 Output: $RESP1"

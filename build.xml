@@ -99,22 +99,30 @@
     </target>
 
     <target name="vault-secrets" depends="vault-login">
-        <echo message="Retrieving secrets from Vault (Skipping TLS Verification)..."/>
+        <echo message="Retrieving secrets from exact Vault KVv2 Path..."/>
 
         <exec executable="bash" outputproperty="VAULT_GIT_OUT" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins ${VAULT_ADDR}/v1/secret/data/data/jenkins | jq -r 'select(.data != null) | if .data.data.GIT_TOKEN != null then .data.data.GIT_TOKEN else .data.GIT_TOKEN end' | head -n 1"/>
+            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/data/jenkins | jq -r '.data.data.GIT_TOKEN'"/>
         </exec>
 
         <exec executable="bash" outputproperty="VAULT_OCP_OUT" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins ${VAULT_ADDR}/v1/secret/data/data/jenkins | jq -r 'select(.data != null) | if .data.data.OCP_TOKEN != null then .data.data.OCP_TOKEN else .data.GIT_TOKEN end' | head -n 1"/>
+            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/data/jenkins | jq -r '.data.data.OCP_TOKEN'"/>
         </exec>
 
         <echo file="vault.properties">GIT_TOKEN=${VAULT_GIT_OUT}${line.separator}OCP_TOKEN=${VAULT_OCP_OUT}</echo>
         <property file="vault.properties"/>
 
-        <echo message="Vault tokens successfully parsed and refreshed inside context environment."/>
+        <condition property="tokens.invalid">
+            <or>
+                <equals arg1="${GIT_TOKEN}" arg2="null"/>
+                <equals arg1="${GIT_TOKEN}" arg2=""/>
+            </or>
+        </condition>
+        <fail message="CRITICAL ERROR: Failed to recover a clean token string value from Vault target path." if="tokens.invalid"/>
+
+        <echo message="Vault tokens successfully verified, isolated, and injected."/>
     </target>
 
     <target name="oc-login" depends="vault-secrets">

@@ -103,18 +103,18 @@
 
         <exec executable="bash" outputproperty="VAULT_GIT_OUT" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.GIT_TOKEN != null then .data.data.GIT_TOKEN else .data.GIT_TOKEN end'"/>
+            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.GIT_TOKEN != null then .data.data.GIT_TOKEN elif .data.GIT_TOKEN != null then .data.GIT_TOKEN else .GIT_TOKEN end'"/>
         </exec>
 
         <exec executable="bash" outputproperty="VAULT_OCP_OUT" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.OCP_TOKEN != null then .data.data.OCP_TOKEN else .data.OCP_TOKEN end'"/>
+            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.OCP_TOKEN != null then .data.data.OCP_TOKEN elif .data.OCP_TOKEN != null then .data.OCP_TOKEN else .OCP_TOKEN end'"/>
         </exec>
 
         <echo file="vault.properties">GIT_TOKEN=${VAULT_GIT_OUT}${line.separator}OCP_TOKEN=${VAULT_OCP_OUT}</echo>
         <property file="vault.properties"/>
 
-        <echo message="Vault tokens loaded and successfully bound to runtime context."/>
+        <echo message="Vault tokens successfully parsed and refreshed inside context environment."/>
     </target>
 
     <target name="oc-login" depends="vault-secrets">
@@ -135,6 +135,11 @@
         <echo message="Uploading BAR to GitHub..."/>
         
         <delete dir="repo" failonerror="false"/>
+
+        <exec executable="bash" failonerror="false">
+            <arg value="-c"/>
+            <arg value="rm -f ~/.git-credentials &amp;&amp; git config --global --unset credential.helper"/>
+        </exec>
 
         <exec executable="git" failonerror="true">
             <arg value="config"/>

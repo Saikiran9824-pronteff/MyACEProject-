@@ -146,11 +146,9 @@
             <arg value="ci-bot"/>
         </exec>
 
-        <exec executable="git" failonerror="true">
-            <env key="GIT_TOKEN" value="${GIT_TOKEN}"/>
-            <arg value="clone"/>
-            <arg value="https://${GIT_TOKEN}@github.com/${GITHUB_REPO}.git"/>
-            <arg value="repo"/>
+        <exec executable="bash" failonerror="true">
+            <arg value="-c"/>
+            <arg value="git clone https://${GIT_TOKEN}@github.com/${GITHUB_REPO}.git repo"/>
         </exec>
 
         <mkdir dir="repo/bars"/>

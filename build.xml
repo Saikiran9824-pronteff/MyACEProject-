@@ -23,8 +23,6 @@
               value="/opt/ace-12.0.7.0/tools"/>
 
     <property name="VAULT_ADDR" value="https://192.168.17.54:8200"/>
-    <property name="VAULT_ROLE_ID" value="${env.VAULT_ROLE_ID}"/>
-    <property name="VAULT_SECRET_ID" value="${env.VAULT_SECRET_ID}"/>
 
     <property name="GITHUB_REPO" value="Saikiran9824-pronteff/MyACEProject-"/>
     <property name="GITHUB_BRANCH" value="main"/>
@@ -47,7 +45,6 @@
         <delete dir="repo"/>
         <delete file="vault.properties" failonerror="false"/>
         <delete file="fetch_secrets.sh" failonerror="false"/>
-        <delete file="vault_login_resp.json" failonerror="false"/>
     </target>
 
     <target name="prepare-workspace" depends="clean">
@@ -95,19 +92,9 @@
     <target name="vault-login">
         <echo message="Authenticating with Vault AppRole (Bypassing Server TLS Handshakes)..."/>
         
-        <exec executable="curl" outputproperty="VAULT_LOGIN_RAW" failonerror="true">
-            <arg value="-sk"/>
-            <arg value="-X"/>
-            <arg value="POST"/>
-            <arg value="-d"/>
-            <arg value="{\&quot;role_id\&quot;:\&quot;${env.VAULT_ROLE_ID}\&quot;,\&quot;secret_id\&quot;:\&quot;${env.VAULT_SECRET_ID}\&quot;}"/>
-            <arg value="${VAULT_ADDR}/v1/auth/approle/login"/>
-        </exec>
-
-        <exec executable="jq" outputproperty="VAULT_TOKEN" failonerror="true">
-            <arg value="-r"/>
-            <arg value=".auth.client_token // empty"/>
-            <inputstring value="${VAULT_LOGIN_RAW}"/>
+        <exec executable="bash" outputproperty="VAULT_TOKEN" failonerror="true">
+            <arg value="-c"/>
+            <arg value="curl -sk -X POST -d '{\&quot;role_id\&quot;:\&quot;${env.VAULT_ROLE_ID}\&quot;,\&quot;secret_id\&quot;:\&quot;${env.VAULT_SECRET_ID}\&quot;}' ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token // empty'"/>
         </exec>
 
         <condition property="login.failed">

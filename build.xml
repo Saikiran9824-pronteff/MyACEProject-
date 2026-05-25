@@ -103,12 +103,12 @@
 
         <exec executable="bash" outputproperty="VAULT_GIT_OUT" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.GIT_TOKEN != null then .data.data.GIT_TOKEN elif .data.GIT_TOKEN != null then .data.GIT_TOKEN else .GIT_TOKEN end'"/>
+            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins ${VAULT_ADDR}/v1/secret/data/data/jenkins | jq -r 'select(.data != null) | if .data.data.GIT_TOKEN != null then .data.data.GIT_TOKEN else .data.GIT_TOKEN end' | head -n 1"/>
         </exec>
 
         <exec executable="bash" outputproperty="VAULT_OCP_OUT" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins | jq -r 'if .data.data.OCP_TOKEN != null then .data.data.OCP_TOKEN elif .data.OCP_TOKEN != null then .data.OCP_TOKEN else .OCP_TOKEN end'"/>
+            <arg value="curl -sk -H 'X-Vault-Token: ${VAULT_TOKEN_RAW}' ${VAULT_ADDR}/v1/secret/data/jenkins ${VAULT_ADDR}/v1/secret/data/data/jenkins | jq -r 'select(.data != null) | if .data.data.OCP_TOKEN != null then .data.data.OCP_TOKEN else .data.GIT_TOKEN end' | head -n 1"/>
         </exec>
 
         <echo file="vault.properties">GIT_TOKEN=${VAULT_GIT_OUT}${line.separator}OCP_TOKEN=${VAULT_OCP_OUT}</echo>

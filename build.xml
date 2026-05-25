@@ -23,8 +23,9 @@
               value="/opt/ace-12.0.7.0/tools"/>
 
     <property name="VAULT_ADDR" value="https://192.168.17.54:8200"/>
-    <property name="VAULT_ROLE_ID" value="${env.VAULT_ROLE_ID}"/>
-    <property name="VAULT_SECRET_ID" value="${env.VAULT_SECRET_ID}"/>
+    
+    <property name="LOCAL_ROLE_ID" value="${env.VAULT_ROLE_ID}"/>
+    <property name="LOCAL_SECRET_ID" value="${env.VAULT_SECRET_ID}"/>
 
     <property name="GITHUB_REPO" value="Saikiran9824-pronteff/MyACEProject-"/>
     <property name="GITHUB_BRANCH" value="main"/>
@@ -95,7 +96,7 @@
         <echo message="Authenticating with Vault AppRole (Skipping TLS Verification)..."/>
         <exec executable="bash" outputproperty="VAULT_TOKEN_RAW" failonerror="true">
             <arg value="-c"/>
-            <arg value="curl -sk -X POST --data-urlencode &quot;role_id=${VAULT_ROLE_ID}&quot; --data-urlencode &quot;secret_id=${VAULT_SECRET_ID}&quot; ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token // empty'"/>
+            <arg value="curl -sk -X POST -d &quot;role_id=${LOCAL_ROLE_ID}&amp;secret_id=${LOCAL_SECRET_ID}&quot; ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token // empty'"/>
         </exec>
     </target>
 
@@ -103,8 +104,8 @@
         <echo message="Generating structural token discovery helper script..."/>
 
         <echo file="fetch_secrets.sh"><![CDATA[#!/bin/bash
-if [ -z "${VAULT_TOKEN_RAW}" ] || [ "${VAULT_TOKEN_RAW}" == "null" ]; then
-    echo "CRITICAL: The login target failed to obtain a usable Vault token string."
+if [ -z "${VAULT_TOKEN_RAW}" ] || [ "${VAULT_TOKEN_RAW}" == "null" ] || [[ "${VAULT_TOKEN_RAW}" == *"bad substitution"* ]]; then
+    echo "CRITICAL: The login target failed to obtain a valid Vault token."
     exit 1
 fi
 

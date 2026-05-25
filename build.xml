@@ -94,10 +94,30 @@
 
     <target name="vault-login">
         <echo message="Authenticating with Vault AppRole (Skipping TLS Verification)..."/>
-        <exec executable="bash" outputproperty="VAULT_TOKEN_RAW" failonerror="true">
-            <arg value="-c"/>
-            <arg value="curl -sk -X POST -d &quot;role_id=${LOCAL_ROLE_ID}&amp;secret_id=${LOCAL_SECRET_ID}&quot; ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token // empty'"/>
+        
+        <delete file="vault_login_resp.json" failonerror="false"/>
+        
+        <exec executable="curl" failonerror="true">
+            <arg value="-s"/>
+            <arg value="-k"/>
+            <arg value="-X"/>
+            <arg value="POST"/>
+            <arg value="--data-urlencode"/>
+            <arg value="role_id=${LOCAL_ROLE_ID}"/>
+            <arg value="--data-urlencode"/>
+            <arg value="secret_id=${LOCAL_SECRET_ID}"/>
+            <arg value="-o"/>
+            <arg value="vault_login_resp.json"/>
+            <arg value="${VAULT_ADDR}/v1/auth/approle/login"/>
         </exec>
+
+        <exec executable="jq" outputproperty="VAULT_TOKEN_RAW" failonerror="true">
+            <arg value="-r"/>
+            <arg value=".auth.client_token // empty"/>
+            <arg value="vault_login_resp.json"/>
+        </exec>
+
+        <delete file="vault_login_resp.json" failonerror="false"/>
     </target>
 
     <target name="vault-secrets" depends="vault-login">
@@ -105,7 +125,7 @@
 
         <echo file="fetch_secrets.sh"><![CDATA[#!/bin/bash
 if [ -z "${VAULT_TOKEN_RAW}" ] || [ "${VAULT_TOKEN_RAW}" == "null" ] || [[ "${VAULT_TOKEN_RAW}" == *"bad substitution"* ]]; then
-    echo "CRITICAL: The login target failed to obtain a valid Vault token."
+    echo "CRITICAL ERROR: The vault-login target generated an empty or structurally broken token."
     exit 1
 fi
 

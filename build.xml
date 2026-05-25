@@ -9,25 +9,19 @@
     </tstamp>
 
     <property name="BUILD_DIR" value="Applications"/>
-
     <property name="APP_NAME" value="${APP_NAME}"/>
     <property name="IR_NAME" value="${IR_NAME}"/>
     <property name="NAMESPACE" value="${NAMESPACE}"/>
     <property name="BAR_TOOL" value="${BAR_TOOL}"/>
 
     <property name="OUTPUT_DIR" value="build"/>
-    <property name="BAR_FILE"
-              value="${OUTPUT_DIR}/${APP_NAME}.${DSTAMP}-${TSTAMP}.bar"/>
-
-    <property name="ACE_TOOLS"
-              value="/opt/ace-12.0.7.0/tools"/>
+    <property name="BAR_FILE" value="${OUTPUT_DIR}/${APP_NAME}.${DSTAMP}-${TSTAMP}.bar"/>
+    <property name="ACE_TOOLS" value="/opt/ace-12.0.7.0/tools"/>
 
     <property name="VAULT_ADDR" value="https://192.168.17.54:8200"/>
-
     <property name="GITHUB_REPO" value="Saikiran9824-pronteff/MyACEProject-"/>
     <property name="GITHUB_BRANCH" value="main"/>
     <property name="GITHUB_PATH" value="bars/${APP_NAME}.${DSTAMP}-${TSTAMP}.bar"/>
-
     <property name="OCP_URL" value="https://api.ocp.pronteff.com:6443"/>
 
     <condition property="is.ibmint">
@@ -71,7 +65,6 @@
             <arg value="--output-bar-file"/>
             <arg value="${BAR_FILE}"/>
         </exec>
-        <echo message="BAR Created: ${BAR_FILE}"/>
     </target>
 
     <target name="create-bar-mqsicreatebar" depends="prepare-workspace,create-bar" if="is.mqsicreatebar">
@@ -84,7 +77,6 @@
             <arg value="-a"/>
             <arg value="${APP_NAME}"/>
         </exec>
-        <echo message="BAR Created: ${BAR_FILE}"/>
     </target>
 
     <target name="create-bar-wrapper" depends="create-bar-ibmint,create-bar-mqsicreatebar"/>
@@ -93,8 +85,10 @@
         <echo message="Authenticating with Vault AppRole (Bypassing Server TLS Handshakes)..."/>
         
         <exec executable="bash" outputproperty="VAULT_TOKEN" failonerror="true">
+            <env key="V_ROLE" value="${env.VAULT_ROLE_ID}"/>
+            <env key="V_SECRET" value="${env.VAULT_SECRET_ID}"/>
             <arg value="-c"/>
-            <arg value="curl -sk -X POST -d '{\&quot;role_id\&quot;:\&quot;${env.VAULT_ROLE_ID}\&quot;,\&quot;secret_id\&quot;:\&quot;${env.VAULT_SECRET_ID}\&quot;}' ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token // empty'"/>
+            <arg value="curl -sk -X POST -d &quot;{\&quot;role_id\&quot;:\&quot;$V_ROLE\&quot;,\&quot;secret_id\&quot;:\&quot;$V_SECRET\&quot;}&quot; ${VAULT_ADDR}/v1/auth/approle/login | jq -r '.auth.client_token // empty'"/>
         </exec>
 
         <condition property="login.failed">
@@ -103,7 +97,7 @@
                 <equals arg1="${VAULT_TOKEN}" arg2="null"/>
             </or>
         </condition>
-        <fail message="CRITICAL ERROR: AppRole auth failed. Verify Jenkins credentials map cleanly." if="login.failed"/>
+        <fail message="CRITICAL ERROR: AppRole login generated an empty context token validation check block." if="login.failed"/>
     </target>
 
     <target name="vault-secrets" depends="vault-login">
@@ -198,7 +192,6 @@ echo "OCP_TOKEN=$OCP1" >> vault.properties
         </exec>
 
         <mkdir dir="repo/bars"/>
-
         <copy file="${BAR_FILE}" tofile="repo/${GITHUB_PATH}" failonerror="true"/>
 
         <exec executable="bash" failonerror="true">

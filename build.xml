@@ -114,7 +114,7 @@
         <echo file="vault.properties">GIT_TOKEN=${VAULT_GIT_OUT}${line.separator}OCP_TOKEN=${VAULT_OCP_OUT}</echo>
         <property file="vault.properties"/>
 
-        <echo message="Vault tokens loaded and successfully bound to global properties."/>
+        <echo message="Vault tokens loaded and successfully bound to runtime context."/>
     </target>
 
     <target name="oc-login" depends="vault-secrets">

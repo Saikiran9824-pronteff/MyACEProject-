@@ -73,7 +73,6 @@
 
     <target name="vault-login">
         <echo message="Authenticating with Vault AppRole at ${VAULT_ADDR}..."/>
-        
         <exec executable="bash" outputproperty="VAULT_RAW_RESPONSE" failonerror="false">
             <env key="V_ROLE" value="${VAULT_ROLE_ID}"/>
             <env key="V_SECRET" value="${VAULT_SECRET_ID}"/>
@@ -100,20 +99,38 @@
     </target>
 
     <target name="vault-secrets" depends="vault-login">
+        <echo message="----------------------------------------------------------"/>
+        <echo message="FETCHING SECRETS FROM VAULT: ${VAULT_ADDR}"/>
+        <echo message="Path: /v1/secret/data/jenkins"/>
+        <echo message="----------------------------------------------------------"/>
+
         <echo file="fetch_secrets.sh"><![CDATA[#!/bin/bash
 RESP=$(curl -sk -H "X-Vault-Token: ${INTERNAL_TOKEN}" "${VAULT_URL_VAR}/v1/secret/data/jenkins")
 GIT=$(echo "$RESP" | jq -r '.data.data.GIT_TOKEN // .data.GIT_TOKEN // empty')
 OCP=$(echo "$RESP" | jq -r '.data.data.OCP_TOKEN // .data.OCP_TOKEN // empty')
 
+if [ -z "$GIT" ] || [ "$GIT" == "null" ]; then
+    echo "ERROR: Could not find required tokens in Vault response."
+    exit 1
+fi
+
 echo "GIT_TOKEN=$GIT" > vault.properties
 echo "OCP_TOKEN=$OCP" >> vault.properties
+
+# Masked output for audit log
+echo "SUCCESS: Fetched GIT_TOKEN (Starts with: ${GIT:0:4}...)"
+echo "SUCCESS: Fetched OCP_TOKEN (Starts with: ${OCP:0:10}...)"
 ]]></echo>
+
         <chmod file="fetch_secrets.sh" perm="755"/>
         <exec executable="./fetch_secrets.sh" failonerror="true">
             <env key="INTERNAL_TOKEN" value="${VAULT_TOKEN}"/>
             <env key="VAULT_URL_VAR" value="${VAULT_ADDR}"/>
         </exec>
+
         <property file="vault.properties"/>
+        <echo message="Vault properties successfully loaded into environment."/>
+        <echo message="----------------------------------------------------------"/>
     </target>
 
     <target name="oc-login" depends="vault-secrets">
@@ -143,6 +160,7 @@ echo "OCP_TOKEN=$OCP" >> vault.properties
             <arg value="--type=merge"/><arg value="-p"/><arg value="{&quot;spec&quot;:{&quot;barURL&quot;:[&quot;${BAR_URL}&quot;]}}"/>
             <arg value="-n"/><arg value="${NAMESPACE}"/>
         </exec>
+        <echo message="DEPLOYMENT COMPLETED SUCCESSFULLY"/>
     </target>
 
 </project>
